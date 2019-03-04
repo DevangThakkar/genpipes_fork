@@ -581,7 +581,6 @@ class FlowChart():
                 continue
 
             # pred = predecessor(s) of step
-            pprint(self.links)
             pred = self.links[step]
 
             # if step has only one predecessor
