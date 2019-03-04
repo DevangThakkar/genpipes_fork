@@ -1,0 +1,52 @@
+# This configuration file describes the relation between the various steps of
+# the pipeline. The predecessor(s) for each node are described below using a
+# certain set of schema. The numbers refer to the step indicated by the number
+# whereas a hyphen ("-") refers to external data being used. There are two
+# types of connectors relating the predecessors for a certain node:
+#
+# ",": The node considers exactly one of the mentioned predecessors.
+# Example: Step 2:trimmomatic needs exactly one of either (i) the FASTQ files
+# or (ii) the converted FASTQ files from step 1, with (i) preferred over (ii)
+#
+# "+": The node needs at least one of the predecessors but considers multiple
+# predecessors, if present.
+# Example: Step 9:picard_mark_duplicates considers as input, all of the output
+# files created in step 5, 6, and 8 - at least one of them being necessary.
+#
+# Notes:
+# Any line beginning with a hash (#) is considered to be a comment.
+# Do not use spaces/tabs between the step number and step name
+#
+#
+#
+# Predecessor(s)					Node
+#
+BAM							1:picard_sam_to_fastq
+FASTQ,1							2:trimmomatic
+2							3:merge_trimmomatic_stats
+3,FASTQ,1						4:bwa_mem_picard_sort_sam
+4,BAM							5:picard_merge_sam_files
+5							6:gatk_indel_realigner
+6							7:merge_realigned
+6							8:fix_mate_by_coordinate
+5+6+8							9:picard_mark_duplicates
+9							10:recalibration
+10							11:verify_bam_id
+10							12:metrics
+10							13:picard_calculate_hs_metrics
+10							14:gatk_callable_loci
+10							15:extract_common_snp_freq
+15							16:baf_plot
+5+9+10							17:gatk_haplotype_caller
+17							18:merge_and_call_individual_gvcf
+18							19:combine_gvcf
+19							20:merge_and_call_combined_gvcf
+20							21:variant_recalibrator
+21							22:dna_sample_metrics
+20,21							23:haplotype_caller_filter_nstretches
+23							24:haplotype_caller_flag_mappability
+24							25:haplotype_caller_snp_id_annotation
+25							26:haplotype_caller_snp_effect
+26							27:haplotype_caller_dbnsfp_annotation
+25							28:haplotype_caller_metrics_vcf_stats
+25							29:haplotype_caller_metrics_snv_graph_metrics
