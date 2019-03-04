@@ -1,0 +1,5 @@
+// Flowchart
+digraph {
+	node [shape=plaintext]
+	0 [label="Graph not created: some nodes don't have a source"]
+}
