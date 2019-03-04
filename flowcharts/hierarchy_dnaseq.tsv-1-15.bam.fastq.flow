@@ -1,0 +1,39 @@
+// Flowchart
+digraph {
+	node [shape=rectangle]
+	edge [arrowhead=normal]
+	BAM [label=BAM]
+	FASTQ [label=FASTQ]
+	1 [label="1:picard_sam_to_fastq"]
+	2 [label="2:trimmomatic"]
+	3 [label="3:merge_trimmomatic_stats"]
+	4 [label="4:bwa_mem_picard_sort_sam"]
+	5 [label="5:picard_merge_sam_files"]
+	6 [label="6:gatk_indel_realigner"]
+	7 [label="7:merge_realigned"]
+	8 [label="8:fix_mate_by_coordinate"]
+	9 [label="9:picard_mark_duplicates"]
+	10 [label="10:recalibration"]
+	11 [label="11:verify_bam_id"]
+	12 [label="12:metrics"]
+	13 [label="13:picard_calculate_hs_metrics"]
+	14 [label="14:gatk_callable_loci"]
+	15 [label="15:extract_common_snp_freq"]
+	BAM -> 1
+	FASTQ -> 2
+	2 -> 3
+	3 -> 4
+	4 -> 5
+	5 -> 6
+	6 -> 7
+	6 -> 8
+	5 -> 9
+	6 -> 9
+	8 -> 9
+	9 -> 10
+	10 -> 11
+	10 -> 12
+	10 -> 13
+	10 -> 14
+	10 -> 15
+}
