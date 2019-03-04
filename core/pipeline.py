@@ -468,14 +468,16 @@ class FlowChart():
 
     """
 
-    def __init__(self, steps=[], hierarchy_file_name='', name='all', if_bam=True, if_fastq=True):
+    def __init__(self, steps=[], fname='', name='all', if_bam=True, if_fastq=True):
         """
         Parameters
         ----------
         steps: list
             Steps of the pipeline being run
-        hierarchy_file_name: string
+        fname: string
             Path to hierarchy_file
+        name: string
+            identifier to be added to flowchart file name
         if_bam: boolean
             Stores if READSET has BAM data or not
         if_fastq: boolean
@@ -489,6 +491,8 @@ class FlowChart():
             Stores if READSET has FASTQ data or not
         self.step_list: list
             Stores list of steps
+        self.steps: string
+            Stores identifier to be added to flowchart file name
         """
 
         self.if_bam = if_bam
@@ -496,7 +500,7 @@ class FlowChart():
         self.step_list = [str(i) for i in steps]
         self.steps=name
 
-        self.parse_hierarchy(hierarchy_file_name)
+        self.parse_hierarchy(fname)
         self.create_flowchart(self.check_validity())
 
         
