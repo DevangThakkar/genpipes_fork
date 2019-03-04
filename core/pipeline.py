@@ -42,6 +42,7 @@ from scheduler import *
 from step import *
 
 from bfx import jsonator
+from graphviz import Digraph
 
 log = logging.getLogger(__name__)
 
@@ -119,7 +120,10 @@ class Pipeline(object):
 
         if self.args.steps:
             if re.search("^\d+([,-]\d+)*$", self.args.steps):
+                if max(parse_range(self.args.steps)) > len(step_list):
+                    raise Exception("You are trying to access a non-existing step.")
                 self._step_range = [self.step_list[i - 1] for i in parse_range(self.args.steps)]
+                self._step_range_num = [i for i in parse_range(self.args.steps)]
             else:
                 raise Exception("Error: step range \"" + self.args.steps +
                     "\" is invalid (should match \d+([,-]\d+)*)!")
@@ -222,6 +226,10 @@ class Pipeline(object):
     @property
     def step_range(self):
         return self._step_range
+    
+    @property
+    def step_range_num(self):
+        return self._step_range_num
 
     @property
     def sample_list(self):
@@ -297,6 +305,17 @@ class Pipeline(object):
         return dependency_jobs
 
     def create_jobs(self):
+        # the flowchart creation engine is called from here as the pipeline
+        # itself is created.  Get name of pipeline and use the corresponding
+        # hierarchy file.  Can be made better in the real implementation.
+        # Another assumption is both fatq and bam files are available.  The
+        # focus right now is to create a minimal working example.
+        if str(type(self)).split('.')[-1].strip('\'>') == 'DnaSeq':
+            FlowChart(
+                steps=self.step_range_num,
+                fname=os.path.dirname(os.path.realpath(__file__))+'/hierarchies/hierarchy_dnaseq.tsv',
+                name=self.args.steps, if_bam=True, if_fastq=True)
+
         for step in self.step_range:
             log.info("Create jobs for step " + step.name + "...")
             jobs = step.create_jobs()
@@ -430,3 +449,332 @@ def parse_range(astr):
         x = part.split('-')
         result.update(range(int(x[0]), int(x[-1]) + 1))
     return sorted(result)
+
+
+
+class FlowChart():
+    """
+    This FlowChart class helps create user-friendly flow charts when a
+    pipeline is executed (either in its entirety or partially). This script
+    needs the user to select steps that are linked to each other; in other
+    words, a step can not be executed unless its predecessor is executed.
+
+    Requirements:
+
+    - a hierarchy file, specifying the predecessor(s) for each node. The
+    format for the hierarchy file is specified in the sample hierarchy file.
+
+    - steps, specified in the execution of the pipeline.
+
+    """
+
+    def __init__(self, steps=[], hierarchy_file_name='', name='all', if_bam=True, if_fastq=True):
+        """
+        Parameters
+        ----------
+        steps: list
+            Steps of the pipeline being run
+        hierarchy_file_name: string
+            Path to hierarchy_file
+        if_bam: boolean
+            Stores if READSET has BAM data or not
+        if_fastq: boolean
+            Stores if READSET has FASTQ data or not
+
+        Modifies
+        ----------
+        self.if_bam: boolean
+            Stores if READSET has BAM data or not
+        self.if_fastq: boolean
+            Stores if READSET has FASTQ data or not
+        self.step_list: list
+            Stores list of steps
+        """
+
+        self.if_bam = if_bam
+        self.if_fastq = if_fastq
+        self.step_list = [str(i) for i in steps]
+        self.steps=name
+
+        self.parse_hierarchy(hierarchy_file_name)
+        self.create_flowchart(self.check_validity())
+
+        
+    def parse_hierarchy(self, hierarchy_file_name):
+        """
+        This function parses the hierarchy file in order to identify the
+        relation between nodes.
+
+        Parameters
+        ----------
+        hierarchy_file_name: path
+            Name of file containing the relations between nodes
+
+        Modifies
+        ----------
+        self.links: dict
+            Dictionary of links between steps
+        self.name_list: list
+            List of names of steps
+        self.hierarchy_file: string
+            Stores the path to the hierarchy_file
+        self.max_step: int
+            Stores the id of the final step in the pipeline
+        """
+
+        self.links = dict()
+        self.name_list = []
+        self.hierarchy_file = hierarchy_file_name
+        self.hierarchy_file_name = hierarchy_file_name.split('/')[-1]
+        self.max_step = 1
+
+        with open(hierarchy_file_name, "r") as f:
+            for line in f:
+
+                # ignoring commented lines
+                if line[0] != "#":
+
+                    # replacing multiple intercolumnar tabs by a single tab
+                    line = "\t".join(line.split())
+                    splitted = line.split("\t")
+
+                    predecessor_term = splitted[0]
+                    step_term = splitted[1]
+                    step_number = step_term.split(":")[0]
+                    step_name = step_term.split(":")[1]
+                    self.name_list.append(step_name)
+                    self.links[step_number] = predecessor_term
+
+                    # identify the final step
+                    if int(step_number) > self.max_step:
+                        self.max_step = int(step_number)
+
+                        
+    def check_validity(self):
+        """
+        This function checks if the steps inputted are continuous or not. The
+        flowchart is created only if the steps are interconnected.
+
+        Parameters
+        ----------
+
+        Modifies
+        ----------
+
+        """
+        # make a copy of the list of steps
+        temp_list = self.step_list[:]
+
+        # add BAM/FASTQ to the copy of list of steps to account for top nodes
+        if self.if_bam:
+            temp_list.append("BAM")
+        if self.if_fastq:
+            temp_list.append("FASTQ")
+
+        for step in temp_list:
+            # ignore the validation for dummy values BAM and FASTQ
+            if step == "BAM" or step == "FASTQ":
+                continue
+
+            # pred = predecessor(s) of step
+            pprint(self.links)
+            pred = self.links[step]
+
+            # if step has only one predecessor
+            if "," not in pred and "+" not in pred:
+                if pred not in temp_list:
+                    return False
+
+            else:
+                # if pred has multiple predecessors
+                separator_list = [",", "+"]
+                for separator in separator_list:
+                    if separator in pred:
+                        pred_list = pred.strip().split(separator)
+
+                        # initialize flag to false, set flag to true if any
+                        # one of the mandated predecessors exists in the list
+                        flag = False
+                        for item in pred_list:
+                            if item in temp_list:
+                                flag = True
+
+                        if not flag:
+                            return False
+
+        return True
+
+    
+    def create_flowchart(self, verity):
+        """
+        This function uses the consecution module and builds a flowchart of
+        the steps involved in the process.
+
+        Parameters
+        ----------
+        verity: boolean
+            Indicates whether a connected pipeline can be made or not
+
+        Modifies
+        ----------
+
+        """
+
+        # if graph is erroneous, create dummy file and exit
+        if not verity:
+
+            # create a graph using Graphviz
+            dot = Digraph(comment="Flowchart",
+                          node_attr={"shape": "plaintext"})
+
+            # add error node
+            dot.node("0", "Graph not created: some nodes don't have a source")
+
+            try:
+                # create folder if not exists
+                dir_name = "flowcharts/"
+                if not os.path.exists(dir_name):
+                    os.makedirs(dir_name)
+
+                if self.if_bam and self.if_fastq:
+                    dot.render(dir_name + self.hierarchy_file_name + "-" +
+                               self.steps + ".bam.fastq.error")
+
+                if self.if_bam and not self.if_fastq:
+                    dot.render(dir_name + self.hierarchy_file_name + "-" +
+                               self.steps + ".bam.error")
+
+                if not self.if_bam and self.if_fastq:
+                    dot.render(dir_name + self.hierarchy_file_name + "-" +
+                               self.steps + ".fastq.error")
+
+                print("Error: some nodes don't have a source.")
+
+            except Exception as inst:
+
+                # raise exception if file is open and can not be modified
+                print("The target file seems to be open already. Please" +
+                      " close the file before proceeding.")
+
+            return
+
+        # store all the nodes that have been added so far
+        added_nodes = []
+
+        # store all the edges that have been added so far
+        added_tuples = []
+
+        # creating a copy of self.step_list with BAM/FASTQ in it
+        temp_list = self.step_list[:]
+
+        # hard code the BAM, FASTQ node if present
+        if self.if_bam:
+            added_nodes.append("BAM")
+            temp_list.append("BAM")
+        if self.if_fastq:
+            added_nodes.append("FASTQ")
+            temp_list.append("FASTQ")
+
+        for step in temp_list:
+            if step == "BAM" or step == "FASTQ":
+                continue
+
+            # if step has only one predecessor
+            if "," not in self.links[step] and "+" not in self.links[step]:
+
+                # if step is not added, add a node for step
+                if step not in added_nodes:
+                    added_nodes.append(step)
+
+                # if link[step] is not added, add a node for link[step]
+                if self.links[step] not in added_nodes:
+                    added_nodes.append(self.links[step])
+
+                added_tuples.append((self.links[step], step))
+
+            # if step has multiple predecessors of which one has to be chosen
+            if "," in self.links[step]:
+
+                # if step is not added, add a node for step
+                if step not in added_nodes:
+                    added_nodes.append(step)
+
+                pred_list = self.links[step].strip().split(",")
+                for item in pred_list:
+
+                    # if there actually exists a link between this predecessor
+                    # and step, proceed
+                    if item in temp_list:
+
+                        added_tuples.append((item, step))
+
+                        # if item is not added, add a node for item
+                        if item not in added_nodes:
+                            added_nodes.append(item)
+
+                        # since only one link needs to considered, break
+                        break
+
+            # if step has multiple predecessors of which all can chosen
+            if "+" in self.links[step]:
+
+                # if step is not added, add a node for step
+                if step not in added_nodes:
+                    added_nodes.append(step)
+
+                pred_list = self.links[step].strip().split("+")
+                for item in pred_list:
+
+                    # if there actually exists a link between this predecessor
+                    # and step, proceed
+                    if item in temp_list:
+
+                        added_tuples.append((item, step))
+
+                        # if item is not added, add a node for item
+                        if item not in added_nodes:
+                            added_nodes.append(item)
+
+        # create a graph using Graphviz
+        dot = Digraph(comment="Flowchart", node_attr={"shape": "rectangle"})
+
+        # add nodes
+        for i in added_nodes:
+            if i == "BAM":
+                dot.node(i, "BAM")
+            if i == "FASTQ":
+                dot.node(i, "FASTQ")
+            if i != "BAM" and i != "FASTQ":
+                dot.node(i, i + ":" + self.name_list[int(i) - 1])
+
+        # add edges
+        for (i, j) in added_tuples:
+            dot.edge(i, j)
+
+        dot.edge_attr.update(arrowhead="normal")
+
+        try:
+            # create folder if not exists
+            dir_name = "flowcharts/"
+            if not os.path.exists(dir_name):
+                os.makedirs(dir_name)
+
+            # save graph
+            if self.if_bam and self.if_fastq:
+                dot.render(dir_name + self.hierarchy_file_name + "-" + self.steps +
+                           ".bam.fastq.flow")
+
+            if self.if_bam and not self.if_fastq:
+                dot.render(dir_name + self.hierarchy_file_name + "-" + self.steps +
+                           ".bam.flow")
+
+            if not self.if_bam and self.if_fastq:
+                dot.render(dir_name + self.hierarchy_file_name + "-" + self.steps +
+                           ".fastq.flow")
+
+            print("Flowchart saved successfully.")
+
+        except Exception as inst:
+            # raise exception if file is open and can not be modified
+            print("The target file seems to be open already. Please" +
+                  " close the file before proceeding.")
