@@ -1,3 +1,6 @@
+## Flowchart creation engine fork:
+The aim of this branch is to incorporate the flowchart creation engine into the genpipes code. The changes are made primarily in [pipelines.py](https://github.com/DevangThakkar/genpipes_fork/blob/flowchart-engine/core/pipeline.py) The additional files required by this are the hierarchy configuration files that specify the relations between the steps for each pipeline. As of now, the files can be placed in the [hierarchies](https://github.com/DevangThakkar/genpipes_fork/tree/flowchart-engine/core/hierarchies) folder. The implementation has a dependency on the graphviz package (can be installed using pip: `pip install graphviz`). The code right now works as a minimal working example for the DnaSeq pipeline. More pipelines can be similarly incorporated if the hierarchy between steps is available. Further steps would include improving the implementation, adding proper documentation and a testing framework for continuous integration of new steps into the hierarchy file and thus the flowchart creation engine.
+
 GenPipes
 ================
 This repository holds several bioinformatics pipelines developed at [McGill University and Génome Québec Innovation Centre](http://gqinnovationcenter.com) (MUGQIC), as part of the [GenAP project](https://genap.ca).
