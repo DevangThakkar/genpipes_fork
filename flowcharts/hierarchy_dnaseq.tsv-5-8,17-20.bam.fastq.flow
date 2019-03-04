@@ -1,0 +1,23 @@
+// Flowchart
+digraph {
+	node [shape=rectangle]
+	edge [arrowhead=normal]
+	BAM [label=BAM]
+	FASTQ [label=FASTQ]
+	5 [label="5:picard_merge_sam_files"]
+	6 [label="6:gatk_indel_realigner"]
+	7 [label="7:merge_realigned"]
+	8 [label="8:fix_mate_by_coordinate"]
+	17 [label="17:gatk_haplotype_caller"]
+	18 [label="18:merge_and_call_individual_gvcf"]
+	19 [label="19:combine_gvcf"]
+	20 [label="20:merge_and_call_combined_gvcf"]
+	BAM -> 5
+	5 -> 6
+	6 -> 7
+	6 -> 8
+	5 -> 17
+	17 -> 18
+	18 -> 19
+	19 -> 20
+}
